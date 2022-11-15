@@ -17,8 +17,8 @@ from queue import Empty
 from pathlib import Path
 from output_handler import handle_output
 
-def get_detector():
-    return fasterrcnn_resnet50_fpn(True)
+
+   
 
 def print_qsize(event, precv_pipe, queue):
     try:
@@ -38,7 +38,7 @@ def print_qsize(event, precv_pipe, queue):
 def transform(pil_image):
     # Transforms to apply on the input PIL image
     return torchvision.transforms.functional.to_tensor(pil_image)
-def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, mcaddress=None):
+def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, mcaddress=None, model_name="resnet50"):
 
     start = time.time()
     # Initialize sync structures
@@ -54,8 +54,8 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     for image_path in Path(images_path).rglob("*.JPEG"):
         mc_client.set(image_path.name, image_path.read_bytes())
 
-    # sleep_time = 1
-    # time.sleep(sleep_time)
+    sleep_time = 5
+    time.sleep(sleep_time)
     
     
     # Initialize processes
@@ -68,7 +68,7 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     detector_processes = [\
             mp.Process(\
                 target=detect_objects,\
-                args=(queue, event, get_detector(),\
+                args=(queue, event, model_name,\
                     device, lock, output_path, shared_list, mcaddress))\
             for i in range(detector_count)]
 

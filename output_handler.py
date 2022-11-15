@@ -19,6 +19,7 @@ def filter_output(output, threshold=FILTER_THRESHOLD):
     """
     Filters out detector `outputs` below `threshold`.
     """
+   
     mask = output["scores"] > threshold
     for keys, items in output.items(): 
         output[keys] = items[mask]
@@ -28,8 +29,17 @@ def get_output_string(path, output):
     Combines `path` and `output` to obtain string having 
     the source of the image and the count of detections.
     """
-    string_list = [f"{get_name(label)}:{count}" \
-                   for label, count in  zip(*output["labels"].unique(return_counts=True))]
+    # Output is a 1d tensor of scores
+    # For each index in output where the score is greater than the threshold, get the name of the object
+    # and the score
+    # print(zip(labels, output))
+    # string_list = f"{path.name} {len(output)} {[(get_name(label), score) for label, score, in zip(labels, output)]}"
+    string_list = ""
+    
+    # string_list = [f"{get_name(label)}:{count}" \
+    #                for label, count in  zip(*output["labels"].unique(return_counts=True))]
+    
+    
     return path.as_posix() + " :: " + ", ".join(string_list) + "\n"
 
 def handle_output(path, output, lock, file, shared_list, start_time, end_time):
@@ -37,7 +47,7 @@ def handle_output(path, output, lock, file, shared_list, start_time, end_time):
     Obtains the output string from `path` and `output` and writes
     to `file` by acquiring a `lock`
     """
-    filter_output(output)
+    # filter_output(output)
     output_string = get_output_string(path, output)
     lock.acquire()
     file.write(output_string); file.flush()

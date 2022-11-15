@@ -1,3 +1,4 @@
+import pandas as pd
 import io
 import time
 import torch
@@ -7,14 +8,40 @@ from queue import Empty
 from pathlib import Path
 from output_handler import handle_output
 from pymemcache.client import base as memcached
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
+from torchvision import transforms
 
 COMPLETE = "READING_COMPLETE"
 def transform(pil_image):
-    # Transforms to apply on the input PIL image
-    return torchvision.transforms.functional.to_tensor(pil_image)
+#     # Transforms to apply on the input PIL image
+
+#     do_transform = transforms.Compose([            #[1]
+#     transforms.Resize(256),                    #[2]
+#     transforms.CenterCrop(224),                #[3]
+#     transforms.ToTensor(),                     #[4]
+#     # transforms.Normalize(                      #[5]
+#     # mean=[0.485, 0.456, 0.406],                #[6]
+#     # std=[0.229, 0.224, 0.225]                  #[7]
+    
+#     # )
+#     ])
+
+    # If image is grayscale, convert to RGB
+    pil_image = pil_image.convert("RGB")
+    
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]
+    )])
+#     # return torchvision.transforms.functional.to_tensor(pil_image)
+    return preprocess(pil_image)
 
 def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress=None, ext="JPEG",\
-        wait_time=0.05, transform=transform, ):
+        wait_time=0.05 ):
     """
     Reader process, if queue is not full it will read an `ext` image from
     `images_path` and put it onto the `queue` after applying the `transform`, 
@@ -38,10 +65,10 @@ def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress
             image_path = image_list.pop()
             # image = Image.open(image_path)
             # print(image_path.name)
-            image = Image.open(io.BytesIO(mc_client.get(image_path.name)))
-            image = transform(image)
-            
-            queue.put((image_path, time.time()))
+            # image = Image.open(io.BytesIO(mc_client.get(image_path.name)))
+            # image = transform(image)
+            image = None
+            queue.put((image, image_path, time.time()))
             psend_pipe.send((len(image_list), image_path.name))
         wait_duration = next_timestamp - time.time()
         time.sleep(wait_duration if wait_duration > 0 else 0)
@@ -49,8 +76,13 @@ def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress
         
     event.set()
     queue.join()
+def get_detector(model_name):
+    if (model_name == "resnet50"):
+        return torchvision.models.resnet50(True)
+    return fasterrcnn_resnet50_fpn(True)
 
-def detect_objects(queue, event, detector, device, lock, output_path, shared_list, mcaddress):
+    return torch.jit.load(model_name + ".pt")
+def detect_objects(queue, event, model_name, device, lock, output_path, shared_list, mcaddress):
     """
     Detector process, Reads a transformed image from the `queue`
     passes it to the detector from `get_detector` and processes the 
@@ -59,20 +91,27 @@ def detect_objects(queue, event, detector, device, lock, output_path, shared_lis
     the `queue`.
     """
     file = open(output_path.as_posix(), "a")
+    detector = get_detector(model_name)
     detector.eval().to(device)
+    
+    # labels = pd.read_csv("labels.txt", sep="\n", header=None).values.tolist()
     
     mc_client = memcached.Client((mcaddress.split(":")[0], int(mcaddress.split(":")[1])))
     while not (event.is_set() and queue.empty()):
         try:
-            image_path, start_time = queue.get(block=True, timeout=0.1)
+            image, image_path, start_time = queue.get(block=True, timeout=0.1)
             image = Image.open(io.BytesIO(mc_client.get(image_path.name)))
             image = transform(image)
         except Empty:
             continue
 
         with torch.no_grad():
-            image = [image.to(device)]
-            output = detector(image)[0]
+            
+            # img_t = transform(image)
+            # batch_t = torch.unsqueeze(img_t.to(device), 0)
+            image = torch.unsqueeze(image, 0)
+            image = image.to(device)
+            output = detector(image)
         queue.task_done()
         end_time = time.time()
         handle_output(image_path, output, lock, file, shared_list, start_time, end_time)
