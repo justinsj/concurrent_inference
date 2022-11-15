@@ -13,5 +13,16 @@ Code pertaining to this [Medium post](https://18alan.medium.com/concurrent-infer
 ![processing](media/processing.gif)
 
 ## Usage
-- Basic usage : `$ python count_objects.py -f input_folder -o output_file.log`
+- Basic usage : `$ python count_objects.py -f input_folder -o output_file.log -d 4`
 - For other options : `$ python count_objects.py -h`
+
+Start the memcached server
+```
+memcached -p 11211 -m 30000 -v -I 1024m
+```
+```
+python count_objects.py -f input_folder -o output_file.log -d 1 -q 1000 -r 15 -m localhost:11211
+```
+
+
+https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries

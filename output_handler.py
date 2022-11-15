@@ -32,7 +32,7 @@ def get_output_string(path, output):
                    for label, count in  zip(*output["labels"].unique(return_counts=True))]
     return path.as_posix() + " :: " + ", ".join(string_list) + "\n"
 
-def handle_output(path, output, lock, file):
+def handle_output(path, output, lock, file, shared_list, start_time, end_time):
     """
     Obtains the output string from `path` and `output` and writes
     to `file` by acquiring a `lock`
@@ -41,4 +41,6 @@ def handle_output(path, output, lock, file):
     output_string = get_output_string(path, output)
     lock.acquire()
     file.write(output_string); file.flush()
+    shared_list.append((path, output_string, start_time, end_time))
     lock.release()
+    

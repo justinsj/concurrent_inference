@@ -1,10 +1,21 @@
 import time
 import torch
 import torch.multiprocessing as mp
+import statistics
+import numpy as np
 from pathlib import Path
 from tqdm.auto import tqdm
+import torchvision
 from read_and_detect import read_images_into_q, detect_objects
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
+
+import io
+from pymemcache.client import base as memcached
+
+from PIL import Image
+from queue import Empty
+from pathlib import Path
+from output_handler import handle_output
 
 def get_detector():
     return fasterrcnn_resnet50_fpn(True)
@@ -24,8 +35,11 @@ def print_qsize(event, precv_pipe, queue):
     except NotImplementedError as err:
         print("JoinableQueue.qsize has not been implemented;"+
             "remainging can't be shown")
+def transform(pil_image):
+    # Transforms to apply on the input PIL image
+    return torchvision.transforms.functional.to_tensor(pil_image)
+def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, mcaddress=None):
 
-def caller(device, images_path, output_path, detector_count=2, qsize=8):
     start = time.time()
     # Initialize sync structures
     queue = mp.JoinableQueue(qsize)
@@ -33,17 +47,29 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8):
     precv_pipe, psend_pipe = mp.Pipe(duplex=False)
     closables = [queue, precv_pipe, psend_pipe]
     lock = mp.Lock()
+    mc_client = memcached.Client((mcaddress.split(":")[0], int(mcaddress.split(":")[1])))
 
+    
+    # Initialize the memcached database with all the images
+    for image_path in Path(images_path).rglob("*.JPEG"):
+        mc_client.set(image_path.name, image_path.read_bytes())
+
+    # sleep_time = 1
+    # time.sleep(sleep_time)
+    
+    
     # Initialize processes
     reader_process = mp.Process(
         target=read_images_into_q,
-        args=(images_path, queue, event, psend_pipe)
+        args=(images_path, queue, event, psend_pipe, rate, mcaddress)
     )
+    
+    shared_list = mp.Manager().list()
     detector_processes = [\
             mp.Process(\
                 target=detect_objects,\
                 args=(queue, event, get_detector(),\
-                    device, lock, output_path))\
+                    device, lock, output_path, shared_list, mcaddress))\
             for i in range(detector_count)]
 
     # Starting processes
@@ -58,4 +84,31 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8):
 
     # Closing everything
     [c.close() for c in closables]
-    print(f"time taken : {time.time() - start} s.")
+    time_taken = time.time() - start
+    print(f"time taken : {time_taken} s.")
+    
+    # Print the rate of inference
+    num_images = len(list(Path(images_path).rglob("*.JPEG")))
+    throughput = num_images / time_taken
+    print(f"rate : {throughput} images/s")
+    
+    # Get list of latencies
+    latencies = [end - start for (path, output_string, start, end) in shared_list]
+    
+    # Calculate the average latency of requests
+    avg_latency = statistics.mean(latencies)
+    
+    # Calculate the p99 latency of requests
+    latencies.sort()
+    
+    p99_latency = np.percentile(latencies, 99)
+    
+    filename = "rates.csv"
+    # If file is empty, add the headers
+    if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
+        with open(filename, "w+") as f:
+            f.write("rate,detector_count,q_size,throughput,avg_latency,p99_latency\n")
+    # Store the rate in a file
+    with open(filename, "a+") as f:
+        f.write(f"{rate},{detector_count},{qsize},{throughput},{avg_latency},{p99_latency}\n")
+
