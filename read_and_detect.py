@@ -30,8 +30,8 @@ def transform(pil_image):
     pil_image = pil_image.convert("RGB")
     
     preprocess = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
+        transforms.Resize(518),
+        transforms.CenterCrop(518),
         transforms.ToTensor(),
         transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
@@ -77,12 +77,21 @@ def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress
     event.set()
     queue.join()
 def get_detector(model_name):
-    if (model_name == "resnet50"):
-        return torchvision.models.resnet50(True)
-    return fasterrcnn_resnet50_fpn(True)
+    # if (model_name == "resnet50"):
+    #     return torchvision.models.resnet50(pretrained=True)
+    # elif (model_name == "inception_v3"):
+    #     return torchvision.models.inception_v3(pretrained=True)
+    # elif (model_name == "vit_b16_in1k"):
+    #     return torch.hub.load("facebookresearch/swag", model="vit_b16_in1k")
+    # elif (model_name == "vgg19_bn"):
+    #     return torchvision.models.vgg19_bn(pretrained=True)
+    # elif (model_name == "wide_resnet101_2"):
+    #     return torchvision.models.wide_resnet101_2(pretrained=True)
+    # elif (model_name == "vit_h14_in1k"):
+    #     return torch.hub.load("facebookresearch/swag", model="vit_h14_in1k")
 
     return torch.jit.load(model_name + ".pt")
-def detect_objects(queue, event, model_name, device, lock, output_path, shared_list, mcaddress):
+def detect_objects(queue, event, model_name, device, lock, output_path, shared_list, mcaddress, data_map, idx):
     """
     Detector process, Reads a transformed image from the `queue`
     passes it to the detector from `get_detector` and processes the 
@@ -96,7 +105,9 @@ def detect_objects(queue, event, model_name, device, lock, output_path, shared_l
     
     # labels = pd.read_csv("labels.txt", sep="\n", header=None).values.tolist()
     
+    start_time = time.time()
     mc_client = memcached.Client((mcaddress.split(":")[0], int(mcaddress.split(":")[1])))
+    count = 0
     while not (event.is_set() and queue.empty()):
         try:
             image, image_path, start_time = queue.get(block=True, timeout=0.1)
@@ -112,7 +123,12 @@ def detect_objects(queue, event, model_name, device, lock, output_path, shared_l
             image = torch.unsqueeze(image, 0)
             image = image.to(device)
             output = detector(image)
+            count += 1
         queue.task_done()
         end_time = time.time()
         handle_output(image_path, output, lock, file, shared_list, start_time, end_time)
+    end_time = time.time()
+    duration = end_time - start_time
+    rate = count / duration
+    data_map[idx] = {"rate": rate, "duration": duration, "count": count}
     file.close()

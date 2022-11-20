@@ -44,6 +44,7 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     # Initialize sync structures
     queue = mp.JoinableQueue(qsize)
     event = mp.Event()
+    data_map = mp.Manager().dict()
     precv_pipe, psend_pipe = mp.Pipe(duplex=False)
     closables = [queue, precv_pipe, psend_pipe]
     lock = mp.Lock()
@@ -69,14 +70,14 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
             mp.Process(\
                 target=detect_objects,\
                 args=(queue, event, model_name,\
-                    device, lock, output_path, shared_list, mcaddress))\
+                    device, lock, output_path, shared_list, mcaddress, data_map, i))\
             for i in range(detector_count)]
 
     # Starting processes
     reader_process.start()
     [dp.start() for dp in detector_processes]
 
-    print_qsize(event, precv_pipe, queue)
+    # print_qsize(event, precv_pipe, queue)
 
     # Waiting for processes to complete
     [dp.join() for dp in detector_processes]
@@ -103,12 +104,26 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     
     p99_latency = np.percentile(latencies, 99)
     
+    average_rate = sum([data_map[i]["rate"] for i in range(detector_count)]) / detector_count
+    print(data_map)
+    
     filename = "rates.csv"
     # If file is empty, add the headers
     if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
         with open(filename, "w+") as f:
-            f.write("rate,detector_count,q_size,throughput,avg_latency,p99_latency\n")
+            f.write("rate,detector_count,q_size,throughput,avg_latency,p99_latency,model_name,average_rate\n")
     # Store the rate in a file
     with open(filename, "a+") as f:
-        f.write(f"{rate},{detector_count},{qsize},{throughput},{avg_latency},{p99_latency}\n")
+        f.write(f"{rate},{detector_count},{qsize},{throughput},{avg_latency},{p99_latency},{model_name},{average_rate}\n")
+        
+        
+    # Store the average rate among detectors in a file
+    # Each entry in data_map is a dict of rate, count, and duration
+    
+    filename = "average_rates.csv"
+    if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
+        with open(filename, "w+") as f:
+            f.write("model_name,rate,detector_count\n")
+    with open(filename, "a+") as f:
+        f.write(f"{model_name},{average_rate},{detector_count}\n")
 

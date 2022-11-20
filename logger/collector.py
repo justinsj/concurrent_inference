@@ -64,6 +64,7 @@ def load_util_data(last_data={}, args={'net-iface':'eth0'}):
 
     # Get the CPU data
     data['unix'] = unix
+    data['cpu_util'] = psutil.cpu_percent()
     data['cpu_freq_current'] = cpu_freq.current * 1000
     data['cpu_freq_min'] = cpu_freq.min
     data['cpu_freq_max'] = cpu_freq.max

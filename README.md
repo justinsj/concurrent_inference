@@ -18,14 +18,14 @@ Code pertaining to this [Medium post](https://18alan.medium.com/concurrent-infer
 
 Start the memcached server
 ```
-memcached -p 11211 -m 30000 -v -I 1024m -l 192.168.168.172
+memcached -p 11211 -m 30000 -v -I 1024m -l 192.168.168.173
 ```
 ```
-python logger/logger.py logger/logs/gpu-saturation-5-rn50.csv -i 1
+python logger/logger.py logger/logs/gpu-saturation-8-rn50-1.csv -i 1
 
 ```
 ```
-python count_objects.py -f input_folder -o output_file.log -d 1 -q 1000 -r 15 -m 192.168.168.172:11211 -n resnet50 -i 1
+python count_objects.py -f input_folder -o output_file.log -q 1000 -r 1000 -m 192.168.168.173:11211 -n resnet50 -i 1 -d 1
 ```
 
 
