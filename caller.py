@@ -38,7 +38,7 @@ def print_qsize(event, precv_pipe, queue):
 def transform(pil_image):
     # Transforms to apply on the input PIL image
     return torchvision.transforms.functional.to_tensor(pil_image)
-def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, mcaddress=None, model_name="resnet50"):
+def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, model_name="resnet50", image_size=224):
 
     start = time.time()
     # Initialize sync structures
@@ -48,21 +48,12 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     precv_pipe, psend_pipe = mp.Pipe(duplex=False)
     closables = [queue, precv_pipe, psend_pipe]
     lock = mp.Lock()
-    mc_client = memcached.Client((mcaddress.split(":")[0], int(mcaddress.split(":")[1])))
-
-    
-    # Initialize the memcached database with all the images
-    for image_path in Path(images_path).rglob("*.JPEG"):
-        mc_client.set(image_path.name, image_path.read_bytes())
-
-    sleep_time = 5
-    time.sleep(sleep_time)
     
     
     # Initialize processes
     reader_process = mp.Process(
         target=read_images_into_q,
-        args=(images_path, queue, event, psend_pipe, rate, mcaddress)
+        args=(images_path, queue, event, psend_pipe, rate, image_size)
     )
     
     shared_list = mp.Manager().list()
@@ -70,7 +61,7 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
             mp.Process(\
                 target=detect_objects,\
                 args=(queue, event, model_name,\
-                    device, lock, output_path, shared_list, mcaddress, data_map, i))\
+                    device, lock, output_path, shared_list, data_map, i))\
             for i in range(detector_count)]
 
     # Starting processes

@@ -18,16 +18,15 @@ if __name__ == "__main__":
     parser.add_argument("-q", "--qsize", 
             help="size of the image queue", type=int, default=8)
     parser.add_argument('-r', '--rate', 
-            help="rate of incoming requests added to the queue", type=str, default="15")
-    parser.add_argument('-m', '--memcached', type=str, default="localhost:11211",
-                        help = "memcached server address")
+            help="rate of incoming requests added to the queue", type=str, default="1000")
     parser.add_argument('-n','--model_name', type=str, default="resnet50",
                         help="model name")
     parser.add_argument('-i', '--gpu_index', type=int, default=0, help="gpu index")
+    parser.add_argument('-s', '--image_size', type=int, default=224, help="size of input image for inference")
     args = parser.parse_args()
 
     mp.set_start_method("spawn")
-    device = torch.device("cuda:" + str(args.gpu_index) if torch.cuda.is_available() else "cpu")
-    
+#     device = torch.device("cuda:" + str(args.gpu_index) if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     # Create the memcached connection
-    caller(device, args.folder, args.output, args.detectors, args.qsize, float(args.rate), args.memcached, args.model_name)
+    caller(device, args.folder, args.output, args.detectors, args.qsize, float(args.rate), args.model_name, args.image_size)

@@ -12,7 +12,7 @@ from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from torchvision import transforms
 
 COMPLETE = "READING_COMPLETE"
-def transform(pil_image):
+def transform(pil_image,image_size):
 #     # Transforms to apply on the input PIL image
 
 #     do_transform = transforms.Compose([            #[1]
@@ -30,8 +30,8 @@ def transform(pil_image):
     pil_image = pil_image.convert("RGB")
     
     preprocess = transforms.Compose([
-        transforms.Resize(518),
-        transforms.CenterCrop(518),
+        transforms.Resize(image_size),
+        transforms.CenterCrop(image_size),
         transforms.ToTensor(),
         transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
@@ -40,7 +40,7 @@ def transform(pil_image):
 #     # return torchvision.transforms.functional.to_tensor(pil_image)
     return preprocess(pil_image)
 
-def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress=None, ext="JPEG",\
+def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, image_size=224, ext="JPEG",\
         wait_time=0.05 ):
     """
     Reader process, if queue is not full it will read an `ext` image from
@@ -54,7 +54,6 @@ def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress
     """
     assert(rate != 0)
     
-    mc_client = memcached.Client((mcaddress.split(":")[0], int(mcaddress.split(":")[1])))
     image_list = list(Path(images_path).rglob(f"*.{ext}"))
     print(f"processing {len(image_list)} images... ")
     
@@ -63,11 +62,8 @@ def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, mcaddress
     while len(image_list) > 0:
         if not queue.full():
             image_path = image_list.pop()
-            # image = Image.open(image_path)
-            # print(image_path.name)
-            # image = Image.open(io.BytesIO(mc_client.get(image_path.name)))
-            # image = transform(image)
-            image = None
+            image = Image.open(image_path)
+            image = transform(image,image_size)
             queue.put((image, image_path, time.time()))
             psend_pipe.send((len(image_list), image_path.name))
         wait_duration = next_timestamp - time.time()
@@ -91,7 +87,7 @@ def get_detector(model_name):
     #     return torch.hub.load("facebookresearch/swag", model="vit_h14_in1k")
 
     return torch.jit.load(model_name + ".pt")
-def detect_objects(queue, event, model_name, device, lock, output_path, shared_list, mcaddress, data_map, idx):
+def detect_objects(queue, event, model_name, device, lock, output_path, shared_list, data_map, idx):
     """
     Detector process, Reads a transformed image from the `queue`
     passes it to the detector from `get_detector` and processes the 
@@ -106,20 +102,15 @@ def detect_objects(queue, event, model_name, device, lock, output_path, shared_l
     # labels = pd.read_csv("labels.txt", sep="\n", header=None).values.tolist()
     
     start_time = time.time()
-    mc_client = memcached.Client((mcaddress.split(":")[0], int(mcaddress.split(":")[1])))
     count = 0
     while not (event.is_set() and queue.empty()):
         try:
             image, image_path, start_time = queue.get(block=True, timeout=0.1)
-            image = Image.open(io.BytesIO(mc_client.get(image_path.name)))
-            image = transform(image)
         except Empty:
             continue
 
         with torch.no_grad():
             
-            # img_t = transform(image)
-            # batch_t = torch.unsqueeze(img_t.to(device), 0)
             image = torch.unsqueeze(image, 0)
             image = image.to(device)
             output = detector(image)
