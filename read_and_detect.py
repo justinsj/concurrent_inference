@@ -54,7 +54,7 @@ def read_images_into_q(images_path, queue, event, psend_pipe, rate=15, image_siz
     """
     assert(rate != 0)
     
-    image_list = list(Path(images_path).rglob(f"*.{ext}"))
+    image_list = list(Path(images_path).rglob(f"*.{ext}"))[0:100]
     print(f"processing {len(image_list)} images... ")
     
     # Calculate when the send the next image
