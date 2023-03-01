@@ -1,3 +1,4 @@
+import os
 import time
 import torch
 from pathlib import Path
@@ -19,13 +20,14 @@ def transform(pil_image, image_size):
 
 
 class CNNProvider(object):
-    def __init__(self, model_name, device):
+    def __init__(self, model_folder, model_name, device, max_count):
+        self.model_folder = model_folder
         self.model_name = model_name
         self.device = device
         self.ext = "JPEG"
-
+        self.max_count = max_count
     def load_inputs(self, inputs_path):
-        inputs_list = list(Path(inputs_path).rglob(f"*.{self.ext}"))[0:100]
+        inputs_list = list(Path(inputs_path).rglob(f"*.{self.ext}"))[0:self.max_count]
         return inputs_list
 
     def prepare_input(self, image_path):
@@ -46,34 +48,37 @@ class CNNProvider(object):
         return output, input_argument, start_time
 
     def get_model(self):
-        model = torch.jit.load(self.model_name + ".pt")
+        model = torch.jit.load(os.path.join(self.model_folder, self.model_name + ".pt"))
         model.eval().to(self.device)
         return model
 
 class ResNet50Provider(CNNProvider):
-    def __init__(self, model_name, device):
-        super().__init__(model_name, device)
+    def __init__(self, model_folder, model_name, device, max_count):
+        super().__init__(model_folder, model_name, device, max_count)
         self.image_size = 224
 
 class CodeBertProvider:
     def prepare_input(self, string):
-        code_tokens=tokenizer.tokenize(string)
+        return string
+
+    def inference_from_queue_message(self, model, queue_message):
+        input_string, input_argument, start_time = queue_message
+        code_tokens=tokenizer.tokenize(input_string)
         tokens=[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
         tokens_ids=tokenizer.convert_tokens_to_ids(tokens)
 
         example = torch.tensor(tokens_ids)[None,:]
-        return example
-
-    def inference(self, model, inputs):
-        model(inputs)
+        example = example.to(device)
+        output = model(example)
+        return output, input_argument, start_time
 
     def load_inputs(self, inputs_path, ext="JPEG"):
-        inputs_list = list(Path(inputs_path).rglob(f"*.{ext}"))[0:100]
+        inputs_list = pd.read_csv(inputs_path)['input'].tolist()
         return inputs_list
 
 
-def get_provider(model_name, device):
+def get_provider(model_folder, model_name, device, max_count):
     if (model_name == "codebert-base"):
-        return CodeBertProvider(model_name, device)
+        return CodeBertProvider(model_folder, model_name, device, max_count)
     if (model_name == "resnet50"):
-        return ResNet50Provider(model_name, device)
+        return ResNet50Provider(model_folder, model_name, device, max_count)

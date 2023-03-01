@@ -7,7 +7,7 @@ from pathlib import Path
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
             description="Get the count of detected objects.")
-    parser.add_argument("-f", "--folder", 
+    parser.add_argument("-if", "--input_folder", 
             help="folder having the images", type=Path,
             required=True)
     parser.add_argument("-o", "--output",
@@ -22,10 +22,17 @@ if __name__ == "__main__":
     parser.add_argument('-m','--model_name', type=str, default="resnet50",
                         help="model name")
     parser.add_argument('-i', '--gpu_index', type=int, default=0, help="gpu index")
+    parser.add_argument('-mf', '--model_folder', type=str, default='.', help="model folder")
+    parser.add_argument('-mc', '--max_count', type=int, default=100, help="max count")
     args = parser.parse_args()
 
     mp.set_start_method("spawn")
     device = torch.device("cuda:" + str(args.gpu_index) if torch.cuda.is_available() else "cpu")
 #     device = torch.device("cpu")
     # Create the memcached connection
-    caller(device, args.folder, args.output, args.detectors, args.qsize, float(args.rate), args.model_name)
+    caller(device, 
+    args.input_folder, args.output, 
+    args.detectors, args.qsize, 
+    float(args.rate), 
+    args.model_name, args.model_folder,
+    args.max_count)

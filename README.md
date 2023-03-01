@@ -25,7 +25,7 @@ python logger/logger.py logger/logs/gpu-saturation-8-rn50-1.csv -i 1
 
 ```
 ```
-python count_objects.py -f input_folder -o output_file.log -q 1000 -r 1000 -m resnet50 -s 224 -d 1
+python count_objects.py -if input_folder -o output_file.log -q 1000 -r 1000 -m resnet50 -s 224 -d 1
 ```
 
 

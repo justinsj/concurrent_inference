@@ -33,7 +33,12 @@ def print_qsize(event, precv_pipe, queue):
         print("JoinableQueue.qsize has not been implemented;"+
             "remainging can't be shown")
 
-def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, model_name="resnet50"):
+def caller(device, 
+    images_path, output_path, 
+    detector_count=2, qsize=8, rate=15, 
+    model_name="resnet50",
+    model_folder='.',
+    max_count=100):
 
     start = time.time()
     # Initialize sync structures
@@ -44,7 +49,7 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     closables = [queue, precv_pipe, psend_pipe]
     lock = mp.Lock()
 
-    provider = get_provider(model_name, device)
+    provider = get_provider(model_folder, model_name, device, max_count)
     
     # Initialize processes
     reader_process = mp.Process(
