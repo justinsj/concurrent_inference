@@ -22,11 +22,10 @@ if __name__ == "__main__":
     parser.add_argument('-m','--model_name', type=str, default="resnet50",
                         help="model name")
     parser.add_argument('-i', '--gpu_index', type=int, default=0, help="gpu index")
-    parser.add_argument('-s', '--image_size', type=int, default=224, help="size of input image for inference")
     args = parser.parse_args()
 
     mp.set_start_method("spawn")
     device = torch.device("cuda:" + str(args.gpu_index) if torch.cuda.is_available() else "cpu")
 #     device = torch.device("cpu")
     # Create the memcached connection
-    caller(device, args.folder, args.output, args.detectors, args.qsize, float(args.rate), args.model_name, args.image_size)
+    caller(device, args.folder, args.output, args.detectors, args.qsize, float(args.rate), args.model_name)

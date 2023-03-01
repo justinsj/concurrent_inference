@@ -10,15 +10,12 @@ from read_and_detect import read_images_into_q, detect_objects
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
 import io
-from pymemcache.client import base as memcached
 
 from PIL import Image
 from queue import Empty
 from pathlib import Path
 from output_handler import handle_output
-
-
-   
+from provider import get_provider
 
 def print_qsize(event, precv_pipe, queue):
     try:
@@ -35,10 +32,8 @@ def print_qsize(event, precv_pipe, queue):
     except NotImplementedError as err:
         print("JoinableQueue.qsize has not been implemented;"+
             "remainging can't be shown")
-def transform(pil_image):
-    # Transforms to apply on the input PIL image
-    return torchvision.transforms.functional.to_tensor(pil_image)
-def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, model_name="resnet50", image_size=224):
+
+def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15, model_name="resnet50"):
 
     start = time.time()
     # Initialize sync structures
@@ -48,19 +43,20 @@ def caller(device, images_path, output_path, detector_count=2, qsize=8, rate=15,
     precv_pipe, psend_pipe = mp.Pipe(duplex=False)
     closables = [queue, precv_pipe, psend_pipe]
     lock = mp.Lock()
-    
+
+    provider = get_provider(model_name, device)
     
     # Initialize processes
     reader_process = mp.Process(
         target=read_images_into_q,
-        args=(images_path, queue, event, psend_pipe, rate, image_size)
+        args=(provider, images_path, queue, event, psend_pipe, rate)
     )
     
     shared_list = mp.Manager().list()
     detector_processes = [\
             mp.Process(\
                 target=detect_objects,\
-                args=(queue, event, model_name,\
+                args=(provider, queue, event, model_name,\
                     device, lock, output_path, shared_list, data_map, i))\
             for i in range(detector_count)]
 
