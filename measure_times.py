@@ -11,9 +11,15 @@ import pandas as pd
 
 model_folder = '../measure-lms/codebert'
 model_names = [
-    # 'resnet50',
-    # 'vit_h14_in1k',
-    'codebert_base',
+    # 'resnet50', # 102735697
+    # 'vit_h14_in1k', # 2534512143
+    # 'codebert_base', # 498965601
+    # 'albert-xxlarge-v2', # 890450058 # not yet working
+    
+    # 'DialoGPT-large', # 3134799287
+    # 'bart-large', # 1625830197
+    # 'gpt2-xl', # 6282033981
+    't5-3B', # 11408097021
     ]
 
 GPU_INDEX = 1
@@ -35,7 +41,7 @@ def measure_cold_start(module_idx, split_model, example):
 
     module_part = split_model.list_of_modules[module_idx]
 
-    module_trace = split_model.trace(module_idx, example)
+    module_trace = split_model.trace(module_idx, example, strict=False)
     module_trace.save(temp_filename)
     
     # Get the size of the file
@@ -63,6 +69,7 @@ def measure_inference(module_idx, split_model, example):
 
 # For each DL model
 for model_name in model_names:
+    model_name = model_name.replace('-', '_')
     output_path = f'logger/logs/times/measurements_{model_name}.csv'
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -70,7 +77,7 @@ for model_name in model_names:
     print(provider)
     inputs_folder = provider.get_inputs_folder()
     inputs_list = provider.load_inputs(inputs_folder)
-    print(inputs_list[0:5])
+    # print(inputs_list[0:5])
     
     main_df = pd.DataFrame(columns=['action','module_idx','num_modules','cold_start_time','exec_time','input_shape','input_bytes','file_size'])
     # For each input example
@@ -83,7 +90,7 @@ for model_name in model_names:
             for module_idx, module_part in enumerate(split_model.list_of_modules):
                 
                 example = split_model.format_input(module_idx, example)
-                print(f"Running {model_name} {module_idx}/{split_model.total_modules-1} {i}/{NUM_TESTS-1}")
+                print(f"Running {model_name} {module_idx}/{split_model.total_modules} {i}/{NUM_TESTS}")
                 input_shape, input_bytes = split_model.get_input_data(module_idx, example)
 
                 # Measure the cold start time

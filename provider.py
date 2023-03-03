@@ -5,7 +5,8 @@ import pandas as pd
 from pathlib import Path
 from PIL import Image
 from torchvision import transforms
-from transformers import AutoTokenizer, AutoConfig
+from transformers import AutoModel, AutoTokenizer, AutoConfig, T5Model
+from torchsummary import summary
 
 from split_model import get_split_model
 
@@ -128,6 +129,15 @@ class LMProvider(Provider):
 class CodeBertProvider(LMProvider):
     number_inferences = 0
 
+    def prepare_input_string(self, tokenizer, input_string):
+        code_tokens=tokenizer.tokenize(input_string)
+        tokens=[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
+        tokens_ids=tokenizer.convert_tokens_to_ids(tokens)
+
+        example = torch.tensor(tokens_ids)[None,:]
+        example = example.to(self.device)
+        return example
+    
     def inference_from_queue_message(self, model_tokenizer, queue_message):
         # CodeBertProvider.number_inferences += 1
         # print(f"Number of inferences: {CodeBertProvider.number_inferences}")
@@ -147,10 +157,15 @@ class CodeBertProvider(LMProvider):
         model_name = self.model_name.replace('-', '_')
         model_path = os.path.join(self.model_folder, model_name + ".pt")
         print(f"Loading model from {model_path}...")
-        model = torch.jit.load(os.path.join(model_path))
+        # model = torch.jit.load(os.path.join(model_path))
+        model = AutoModel.from_pretrained("microsoft/codebert-base")
         model.eval()
         tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
         model = model.to(self.device)
+
+        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
+        print(f"Model loaded from {model_path}...")
+        # print(f"Summary: {model}")
 
         return (model, tokenizer)
 
@@ -172,7 +187,8 @@ class AlbertProvider(LMProvider):
         model_name = self.model_name.replace('-', '_')
         model_path = os.path.join(self.model_folder, model_name + ".pt")
         print(f"Loading model from {model_path}...")
-        model = torch.jit.load(os.path.join(model_path))
+        # model = torch.jit.load(os.path.join(model_path))
+        model = AutoModel.from_pretrained(model_name.replace('_','-'))
         model.eval()
         tokenizer = AutoTokenizer.from_pretrained(model_name.replace('_','-'))
 
@@ -204,7 +220,8 @@ class T5Provider(LMProvider):
         model_name = self.model_name.replace('-', '_')
         model_path = os.path.join(self.model_folder, model_name + ".pt")
         print(f"Loading model from {model_path}...")
-        model = torch.jit.load(os.path.join(model_path))
+        # model = torch.jit.load(os.path.join(model_path))
+        model = T5Model.from_pretrained(model_name.replace('_','-'), torchscript=True)
         model.eval()
         tokenizer = AutoTokenizer.from_pretrained(model_name.replace('_','-'))
         config = AutoConfig.from_pretrained(model_name.replace('_','-'))
@@ -224,3 +241,5 @@ def get_provider(model_folder, model_name, device, max_count):
         return ResNet50Provider(model_folder, model_name, device, max_count)
     if (model_name in ['vit_h14_in1k']):
         return ViTProvider(model_folder, model_name, device, max_count)
+    
+    raise Exception(f"Model {model_name} not found in get_provider")
