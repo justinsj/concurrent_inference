@@ -19,10 +19,11 @@ import math
 import pandas as pd
         
 class SplitModel(torch.nn.Module):
-    def __init__(self, model_name, model):
+    def __init__(self, model_name, model, device):
         super().__init__()
         self.model_name = model_name
         self.model = model
+        self.device = device
 
         # self.traced_model = torch.jit.trace(model, example)
 
@@ -48,7 +49,28 @@ class SplitModel(torch.nn.Module):
     def get_temp_name(self, module_idx):
         return f"{self.model_name}_{module_idx}.pt"
         
-class ResNetSplitModel(SplitModel):
+    def trace(self, module_idx, example):
+        module_part = self.list_of_modules[module_idx]
+        traced_model = torch.jit.trace(module_part, example)
+        return traced_model
+    
+    def inference(self, module_idx, example):
+        module_part = self.list_of_modules[module_idx]
+        print(f"Running inference on {module_idx} {module_part}")
+        print(f"Input: {example}")
+        print(f"shape: {example.shape}")
+        return module_part(example)
+
+    def format_input(self, module_idx, example):
+        return example
+
+class CNNSplitModel(SplitModel):
+    def format_input(self, module_idx, example):
+        if (module_idx == 0):
+            example = torch.unsqueeze(example, 0)
+            example = example.to(self.device)
+        return example
+class ResNetSplitModel(CNNSplitModel):
     def get_next_input(self, module_idx, example):
         example = self.list_of_modules[module_idx](example)
         
@@ -59,7 +81,7 @@ class ResNetSplitModel(SplitModel):
     def start_load_modules(self):
         self.load_list_of_modules(self.model, 1)
 
-class ViTSplitModel(SplitModel):
+class ViTSplitModel(CNNSplitModel):
     def get_next_input(self, module_idx, example):
         example = self.list_of_modules[module_idx](example)
 
@@ -67,6 +89,7 @@ class ViTSplitModel(SplitModel):
             example = example.permute(0, 2, 3, 1)
             example = example.reshape(1369, 1, 1280)
         
+        print(f"Module {module_idx} shape: {example.shape}")
         if module_idx == self.total_modules - 2:
             example = example[0]
 
@@ -77,9 +100,9 @@ class ViTSplitModel(SplitModel):
 
 
 
-def get_split_model(model_name, model):
+def get_split_model(model_name, model, device):
     if model_name == "resnet50":
-        return ResNetSplitModel(model_name, model)
-    if model_name == "vit":
-        return ViTSplitModel(model_name, model)
-    return SplitModel(model_name, model)
+        return ResNetSplitModel(model_name, model, device)
+    if model_name == "vit_h14_in1k":
+        return ViTSplitModel(model_name, model, device)
+    raise Exception(f"Model {model_name} not found in get_split_model")

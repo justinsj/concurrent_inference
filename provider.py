@@ -37,7 +37,8 @@ class Provider(object):
     def get_split_model(self):
         model_name = self.model_name
         model = self.get_model()
-        split_model = get_split_model(model_name, model)
+        device = self.device
+        split_model = get_split_model(model_name, model, device)
         return split_model
     
     def load_inputs(self, inputs_path):
@@ -68,7 +69,13 @@ class Provider(object):
     def start_load_modules(self):
         self.load_list_of_modules(self.model, 3)
 
+    def get_inputs_folder(self):
+        raise NotImplementedError(f"get_inputs_folder() not implemented for {self.__class__.__name__}")
+
 class CNNProvider(Provider):
+    def get_inputs_folder(self):
+        return './input_folder'
+    
     def load_inputs(self, inputs_path):
         inputs_list = list(Path(inputs_path).rglob(f"*.{self.ext}"))[0:self.max_count]
         return inputs_list
@@ -86,26 +93,40 @@ class CNNProvider(Provider):
         output = model(image)
         return output, input_argument, start_time
 
-class ResNet50Provider(Provider):
+class ResNet50Provider(CNNProvider):
     def __init__(self, model_folder, model_name, device, max_count):
         super().__init__(model_folder, model_name, device, max_count)
         self.image_size = 224
 
     def load_inputs(self, input_folder):
-        input_folder = './input_folder'
         inputs_list = list(Path(input_folder).rglob(f"*.{self.ext}"))[0:self.max_count]
         return inputs_list
-
+class ViTProvider(CNNProvider):
+    def __init__(self, model_folder, model_name, device, max_count):
+        super().__init__(model_folder, model_name, device, max_count)
+        self.image_size = 518
+    def get_model(self):
+        model_name = self.model_name.replace('-', '_')
+        model_path = os.path.join(self.model_folder, model_name + ".pt")
+        # if not os.path.exists(model_path):
+        model = torch.hub.load("facebookresearch/swag", model=model_name)
+        # else:
+        #     model = torch.jit.load(model_path)
+        model.eval()
+        model = model.to(self.device)
+        return model
     
-
-class CodeBertProvider(Provider):
-    number_inferences = 0
+class LMProvider(Provider):
+    def get_inputs_folder(self):
+        return '../measure-lms/codebert/cleaned_inputs.csv'
+    
+    def prepare_input(self, string):
+        return string
     def load_inputs(self, inputs_path, ext="JPEG"):
         inputs_list = pd.read_csv(inputs_path)['input'].tolist()[:self.max_count]
         return inputs_list
-
-    def prepare_input(self, string):
-        return string
+class CodeBertProvider(LMProvider):
+    number_inferences = 0
 
     def inference_from_queue_message(self, model_tokenizer, queue_message):
         # CodeBertProvider.number_inferences += 1
@@ -133,14 +154,8 @@ class CodeBertProvider(Provider):
 
         return (model, tokenizer)
 
-class AlbertProvider(Provider):
+class AlbertProvider(LMProvider):
     number_inferences = 0
-    def load_inputs(self, inputs_path, ext="JPEG"):
-        inputs_list = pd.read_csv(inputs_path)['input'].tolist()[:self.max_count]
-        return inputs_list
-
-    def prepare_input(self, string):
-        return string
 
     def inference_from_queue_message(self, model_tokenizer, queue_message):
         model, tokenizer = model_tokenizer
@@ -167,14 +182,8 @@ class AlbertProvider(Provider):
         return (model, tokenizer)
 
 
-class T5Provider(Provider):
+class T5Provider(LMProvider):
     number_inferences = 0
-    def load_inputs(self, inputs_path, ext="JPEG"):
-        inputs_list = pd.read_csv(inputs_path)['input'].tolist()[:self.max_count]
-        return inputs_list
-
-    def prepare_input(self, string):
-        return string
 
     def inference_from_queue_message(self, model_tokenizer, queue_message):
         model, tokenizer = model_tokenizer
@@ -213,3 +222,5 @@ def get_provider(model_folder, model_name, device, max_count):
         return T5Provider(model_folder, model_name, device, max_count)
     if (model_name == "resnet50"):
         return ResNet50Provider(model_folder, model_name, device, max_count)
+    if (model_name in ['vit_h14_in1k']):
+        return ViTProvider(model_folder, model_name, device, max_count)
