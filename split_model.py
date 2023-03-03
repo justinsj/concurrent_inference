@@ -1,3 +1,6 @@
+import sys
+from transformers  import RobertaTokenizerFast
+
 import os
 import torch
 import torchvision
@@ -34,12 +37,16 @@ class SplitModel(torch.nn.Module):
         self.list_of_modules = []
         self.start_load_modules()
         self.total_modules = len(self.list_of_modules)
+    def get_input_data(self, module_idx, example):
+        raise NotImplementedError(f"get_input_data not implemented for {self.__class__.__name__}")
 
     def start_load_modules(self):
         self.load_list_of_modules(self.model, 3)
 
     def load_list_of_modules(self, module, remaining_depth = 0):
         if remaining_depth == 0:
+            return
+        if type(module) == tuple:
             return
         for child in module.children():
             # Add self if it does not have any children
@@ -56,12 +63,12 @@ class SplitModel(torch.nn.Module):
     
     def inference(self, module_idx, example):
         module_part = self.list_of_modules[module_idx]
-        print(f"Running inference on {module_idx} {module_part}")
-        print(f"Input: {example}")
-        print(f"shape: {example.shape}")
         return module_part(example)
 
     def format_input(self, module_idx, example):
+        return example
+    def get_next_input(self, module_idx, example):
+        example = self.list_of_modules[module_idx](example)
         return example
 
 class CNNSplitModel(SplitModel):
@@ -70,6 +77,10 @@ class CNNSplitModel(SplitModel):
             example = torch.unsqueeze(example, 0)
             example = example.to(self.device)
         return example
+    def get_input_data(self, module_idx, example):
+        input_shape = list(example.shape)
+        input_bytes = example.nelement() * example.element_size()
+        return input_shape, input_bytes
 class ResNetSplitModel(CNNSplitModel):
     def get_next_input(self, module_idx, example):
         example = self.list_of_modules[module_idx](example)
@@ -98,11 +109,44 @@ class ViTSplitModel(CNNSplitModel):
 
         return example
 
+class CodeBertSplitModel(SplitModel):
+    def get_children(self, module):
+        children = []
+        if type(module) == tuple:
+            children = module
+        elif (type(module) == RobertaTokenizerFast):
+            return []
+        else:
+            print(f"commands: {dir(module)}")
+            children = module.children()
+        return list(children)
+    
+    def get_input_data(self, module_idx, example):
+        if type(example) == str:
+            input_shape = [len(example)]
+            input_bytes = sys.getsizeof(example)
+        else:
+            input_shape = list(example.shape)
+            input_bytes = example.nelement() * example.element_size()
+        return input_shape, input_bytes
 
+    def load_list_of_modules(self, module, remaining_depth = 0):
+        print(f"Loading modules {remaining_depth}")
+        if remaining_depth == 0:
+            return
+        children = self.get_children(module)
+        print(f"Length of children: {len(children)}")
+        for child in children:
+            # Add self if it does not have any children
+            if len(self.get_children(child)) == 0 or remaining_depth == 1:
+                self.list_of_modules.append(child)
+            self.load_list_of_modules(child, remaining_depth - 1)
 
 def get_split_model(model_name, model, device):
     if model_name == "resnet50":
         return ResNetSplitModel(model_name, model, device)
     if model_name == "vit_h14_in1k":
         return ViTSplitModel(model_name, model, device)
+    if model_name == "codebert_base":
+        return CodeBertSplitModel(model_name, model, device)
     raise Exception(f"Model {model_name} not found in get_split_model")

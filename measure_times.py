@@ -12,7 +12,8 @@ import pandas as pd
 model_folder = '../measure-lms/codebert'
 model_names = [
     # 'resnet50',
-    'vit_h14_in1k'
+    # 'vit_h14_in1k',
+    'codebert_base',
     ]
 
 GPU_INDEX = 1
@@ -82,9 +83,8 @@ for model_name in model_names:
             for module_idx, module_part in enumerate(split_model.list_of_modules):
                 
                 example = split_model.format_input(module_idx, example)
-                print(f"Running {model_name} {module_idx}/{split_model.total_modules} {i}/{NUM_TESTS}")
-                input_shape = list(example.shape)
-                input_bytes = example.nelement() * example.element_size()
+                print(f"Running {model_name} {module_idx}/{split_model.total_modules-1} {i}/{NUM_TESTS-1}")
+                input_shape, input_bytes = split_model.get_input_data(module_idx, example)
 
                 # Measure the cold start time
                 cold_start_data = measure_cold_start(module_idx, split_model, example)
@@ -97,14 +97,14 @@ for model_name in model_names:
                 # Keep the output and perform the conversion to the next input
                 example = split_model.get_next_input(module_idx, example)
 
-                main_df.append({
+                main_df = main_df.append({
                     'action': 'cold_start', 
                     'module_idx': module_idx, 
                     'num_modules': split_model.total_modules, 
                     'cold_start_time': cold_start_data.cold_start_time, 
                     'exec_time': exec_time,
                     'input_shape': input_shape,
-                    'input_bytes': example.nelement() * example.element_size(),
+                    'input_bytes': input_bytes,
                     'file_size': cold_start_data.file_size,
                 }, ignore_index=True)
 
