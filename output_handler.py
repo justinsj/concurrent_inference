@@ -40,7 +40,8 @@ def get_output_string(path, output):
     #                for label, count in  zip(*output["labels"].unique(return_counts=True))]
     
     
-    return path.as_posix() + " :: " + ", ".join(string_list) + "\n"
+    # return path.as_posix() + " :: " + ", ".join(string_list) + "\n"
+    return '\n'
 
 def handle_output(path, output, lock, file, shared_list, start_time, end_time):
     """

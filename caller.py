@@ -1,8 +1,10 @@
+import os
 import time
 import torch
 import torch.multiprocessing as mp
 import statistics
 import numpy as np
+import pandas as pd
 from pathlib import Path
 from tqdm.auto import tqdm
 import torchvision
@@ -34,7 +36,7 @@ def print_qsize(event, precv_pipe, queue):
             "remainging can't be shown")
 
 def caller(device, 
-    images_path, output_path, 
+    inputs_path, output_path, 
     detector_count=2, qsize=8, rate=15, 
     model_name="resnet50",
     model_folder='.',
@@ -50,19 +52,18 @@ def caller(device,
     lock = mp.Lock()
 
     provider = get_provider(model_folder, model_name, device, max_count)
-    
+    print(f"Provider: {provider}")
     # Initialize processes
     reader_process = mp.Process(
         target=read_images_into_q,
-        args=(provider, images_path, queue, event, psend_pipe, rate)
+        args=(provider, inputs_path, queue, event, psend_pipe, rate)
     )
     
     shared_list = mp.Manager().list()
     detector_processes = [\
             mp.Process(\
                 target=detect_objects,\
-                args=(provider, queue, event, model_name,\
-                    device, lock, output_path, shared_list, data_map, i))\
+                args=(provider, queue, event, lock, output_path, shared_list, data_map, i))\
             for i in range(detector_count)]
 
     # Starting processes
@@ -81,8 +82,8 @@ def caller(device,
     print(f"time taken : {time_taken} s.")
     
     # Print the rate of inference
-    num_images = len(list(Path(images_path).rglob("*.JPEG")))
-    throughput = num_images / time_taken
+    num_items = provider.max_count
+    throughput = num_items / time_taken
     print(f"rate : {throughput} images/s")
     
     # Get list of latencies
@@ -99,23 +100,39 @@ def caller(device,
     average_rate = sum([data_map[i]["rate"] for i in range(detector_count)]) / detector_count
     print(data_map)
     
-    filename = "rates.csv"
-    # If file is empty, add the headers
-    if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
-        with open(filename, "w+") as f:
-            f.write("rate,detector_count,q_size,throughput,avg_latency,p99_latency,model_name,average_rate\n")
-    # Store the rate in a file
-    with open(filename, "a+") as f:
-        f.write(f"{rate},{detector_count},{qsize},{throughput},{avg_latency},{p99_latency},{model_name},{average_rate}\n")
+    output_path = f"logger/logs/rates/{model_name}_{detector_count}.csv"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    df = pd.DataFrame({
+        'msg_rate': rate,
+        'detector_count': detector_count,
+        'q_size': qsize,
+        'throughput': throughput,
+        'avg_latency': avg_latency,
+        'p99_latency': p99_latency,
+        'model_name': model_name,
+        'max_count': max_count,
+        'average_rate': average_rate,
+    }, index=[0])
+
+    df.to_csv(output_path, mode='a', index=False, header=not os.path.exists(output_path))
+    # # If file is empty, add the headers
+    # if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
+    #     with open(filename, "w+") as f:
+    #         f.write("msg_rate,detector_count,q_size,throughput,avg_latency,p99_latency,model_name,max_count,average_rate\n")
+    # # Store the rate in a file
+    # with open(filename, "a+") as f:
+    #     f.write(f"{rate},{detector_count},{qsize},{throughput},{avg_latency},{p99_latency},{model_name},{max_count},{average_rate}\n")
         
         
     # Store the average rate among detectors in a file
     # Each entry in data_map is a dict of rate, count, and duration
     
-    filename = "average_rates.csv"
-    if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
-        with open(filename, "w+") as f:
-            f.write("model_name,rate,detector_count\n")
-    with open(filename, "a+") as f:
-        f.write(f"{model_name},{average_rate},{detector_count}\n")
+    # filename = "average_rates.csv"
+
+    # if (not Path(filename).is_file()) or (Path(filename).stat().st_size == 0):
+    #     with open(filename, "w+") as f:
+    #         f.write("model_name,rate,detector_count\n")
+    # with open(filename, "a+") as f:
+    #     f.write(f"{model_name},{average_rate},{detector_count}\n")
 

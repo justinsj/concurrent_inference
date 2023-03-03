@@ -32,6 +32,7 @@ def get_gpu_data(last_data, args):
     data['gpu_memory_total'] = float(gpu_data[2])
     data['gpu_memory_used'] = float(gpu_data[3])
     
+    # print(f"GPU Data: {data}")
     return data
 
 def load_util_data(last_data={}, args={'net-iface':'eth0'}):

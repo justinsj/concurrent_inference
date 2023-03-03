@@ -25,8 +25,24 @@ python logger/logger.py logger/logs/gpu-saturation-8-rn50-1.csv -i 1
 
 ```
 ```
-python count_objects.py -if input_folder -o output_file.log -q 1000 -r 1000 -m resnet50 -s 224 -d 1
+python count_objects.py -if input_folder -o output_file.log -q 1000 -r 1000 -m resnet50 -d 1
+
+python count_objects.py -if ~/measure-lms/codebert/clean_inputs.csv -o output_file.log -q 1000 -r 1000 -m codebert_base -mf ~/measure-lms/codebert -d 1 -i 1 -mc 98
+
+python count_objects.py -if ~/measure-lms/codebert/clean_inputs.csv -o output_file.log -q 1000 -r 1000 -m albert_xxlarge_v2 -mf ~/measure-lms/codebert -d 1 -i 1 -mc 98
 ```
 
 
 https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries
+
+## Measurement Usage
+
+```
+conda activate codebert
+```
+
+```
+python measure_footprints.py
+python measure_times.py
+python analyze_data.py
+```

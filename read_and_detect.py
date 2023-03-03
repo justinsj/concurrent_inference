@@ -3,7 +3,6 @@ import io
 import time
 import torch
 import torchvision
-from PIL import Image
 from queue import Empty
 from output_handler import handle_output
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
@@ -25,7 +24,7 @@ def read_images_into_q(provider, inputs_path, queue, event, psend_pipe, rate=15,
     assert(rate != 0)
     
     inputs_list = provider.load_inputs(inputs_path)
-    print(f"processing {len(inputs_list)} images... ")
+    print(f"processing {len(inputs_list)} items... ")
     
     # Calculate when the send the next image
     next_timestamp = time.time() + 1 / rate
@@ -42,7 +41,7 @@ def read_images_into_q(provider, inputs_path, queue, event, psend_pipe, rate=15,
     event.set()
     queue.join()
     
-def detect_objects(provider, queue, event, model_name, device, lock, output_path, shared_list, data_map, idx):
+def detect_objects(provider, queue, event, lock, output_path, shared_list, data_map, idx):
     """
     Detector process, Reads a transformed image from the `queue`
     passes it to the detector from `get_detector` and processes the 
