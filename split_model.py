@@ -43,7 +43,8 @@ class SplitModel(torch.nn.Module):
 
     def get_list_of_modules(self):
         return self.load_list_of_modules(self.model, DEFAULT_MAX_DEPTH)
-    
+    def get_children(self, module):
+        return list(module.children())
     def load_list_of_modules(self, module, remaining_depth = 0, acc = []):
         if remaining_depth <= 0:
             print(f"Adding {module.__class__.__name__} to list of modules")
