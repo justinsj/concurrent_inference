@@ -11,10 +11,10 @@ import pandas as pd
 
 model_folder = '../measure-lms/codebert'
 model_names = [
-    'resnet50', # 102735697
-    'vit_h14_in1k', # 2534512143
-    'codebert_base', # 498965601
-    'albert-xxlarge-v2', # 890450058
+    # 'resnet50', # 102735697
+    # 'vit_h14_in1k', # 2534512143
+    # 'codebert_base', # 498965601
+    # 'albert-xxlarge-v2', # 890450058
     'DialoGPT-large', # 3134799287
     'bart-large', # 1625830197
     'gpt2-xl', # 6282033981
@@ -26,9 +26,9 @@ GPU_INDEX = 1
 device = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
 
 # inputs_folder = '../measure-lms/codebert/clean_inputs.csv'
-MAX_COUNT = 3#98
+MAX_COUNT = 50
 
-NUM_TESTS = 1
+NUM_TESTS = 10
 
 
 class ColdStartData:
@@ -96,7 +96,7 @@ for model_name in model_names:
 
                 # Measure the cold start time
                 cold_start_data = measure_cold_start(module_idx, split_model, example)
-                # cold_start_time, file_size
+                # cold_start_time, file_size, load_time
 
                 # Measure the inference time
                 exec_time = measure_inference(module_idx, split_model, example)
