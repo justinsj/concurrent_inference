@@ -65,6 +65,7 @@ class SplitModel(torch.nn.Module):
         
     def trace(self, module_idx, example, strict=True):
         module_part = self.list_of_modules[module_idx]
+        print(f" Example: {example}")
         traced_model = torch.jit.trace(module_part, example, strict=strict)
         return traced_model
     
@@ -75,7 +76,7 @@ class SplitModel(torch.nn.Module):
     def format_input(self, module_idx, example):
         return example
     def get_next_input(self, module_idx, example):
-        example = self.list_of_modules[module_idx](example)
+        example = self.inference(module_idx, example)
         return example
 
 class CNNSplitModel(SplitModel):
@@ -185,7 +186,8 @@ class AlbertSplitModel(LMSplitModel):
 class T5SplitModel(LMSplitModel):
         
     def get_list_of_modules(self):
-        return self.load_list_of_modules(self.model, 2)
+        print(f"Model: {self.model}")
+        return self.load_list_of_modules(self.model, 3)
     def get_children(self, module):
         children = []
         print(f"Module name: {module.__class__.__name__}, type: {type(module)}")
@@ -195,9 +197,12 @@ class T5SplitModel(LMSplitModel):
             return []
         elif ('Embedding' in (module.__class__.__name__)):
             return []
-            
         else:
-            children = module.children()
+            if (module.__class__.__name__ == 'T5ForConditionalGeneration'):
+                print(f" Found T5ForConditionalGeneration")
+                children = list(module.children())[1:] # Skip the first shared module
+            else:
+                children = module.children()
         return list(children)
     
     def get_input_data(self, module_idx, example):
@@ -208,24 +213,51 @@ class T5SplitModel(LMSplitModel):
     def format_input(self, module_idx, example):
         tokenizer = self.tokenizer
         if (module_idx == 0):
-            module_part = self.list_of_modules[module_idx]
-            input_ids = tokenizer(example, return_tensors='pt').input_ids
-            attention_mask = input_ids.ne(self.model.config.pad_token_id).long()
-            decoder_input_ids = tokenizer(example, return_tensors='pt').input_ids
+            self.original_example = example
+            # module_part = self.list_of_modules[module_idx]
+            # input_ids = tokenizer(example, return_tensors='pt').input_ids
+            # attention_mask = input_ids.ne(self.model.config.pad_token_id).long()
+            # decoder_input_ids = tokenizer(example, return_tensors='pt').input_ids
 
-            input_ids = input_ids.to(self.device)
-            attention_mask = attention_mask.to(self.device)
-            decoder_input_ids = decoder_input_ids.to(self.device)
+            # input_ids = input_ids.to(self.device)
+            # attention_mask = attention_mask.to(self.device)
+            # decoder_input_ids = decoder_input_ids.to(self.device)
 
-            return (input_ids, attention_mask, decoder_input_ids)
+            # return (input_ids, attention_mask, decoder_input_ids)
 
+            # example = torch.tensor(tokenizer.encode(example, add_special_tokens=True)).unsqueeze(0)
+            # example = example.to(self.device)
+            example = tokenizer.encode(example, return_tensors="pt")
+            # code_tokens=tokenizer.tokenize(example)
+            # tokens=[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
+            # tokens_ids=tokenizer.convert_tokens_to_ids(tokens)
+
+            # example = torch.tensor(tokens_ids)[None,:]
+            example = example.to(self.device)
+        print(f" Example in format ({example.__class__.__name__}): {example}")
+
+        if (module_idx in [2,3,4,5,6,7]):
+            return example[0]
+        if (module_idx in [9]):
+            print(f"Example shape: {example.shape}")
+            # last_hidden_state = example
+            # example = torch.cat([torch.tensor([[[0]]]).to(self.device), last_hidden_state], dim=1)
+            # example = example.to(self.device)
+            example = tokenizer.encode(self.original_example, return_tensors="pt")
+            example = example.to(self.device)
+        if (module_idx in [11,12,13,14,15,16]):
+            return example[0]
         return example
     
     def inference(self, module_idx, example):
         module_part = self.list_of_modules[module_idx]
         if (module_idx == 0):
-            input_ids, attention_mask, decoder_input_ids = example
-            return module_part(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=decoder_input_ids)
+            # input_ids, attention_mask, decoder_input_ids = example
+            # return module_part(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=decoder_input_ids)
+            # return module_part.generate(input_ids=example)
+            return module_part(example)
+        
+        
         return module_part(example)
 
     
@@ -238,6 +270,6 @@ def get_split_model(model_name, model, device):
         return CodeBertSplitModel(model_name, model, device)
     if model_name == "albert_xxlarge_v2":
         return AlbertSplitModel(model_name, model, device)
-    if model_name in ['t5_3B']:
+    if model_name in ['t5_3B','t5_small']:
         return T5SplitModel(model_name, model, device)
     raise Exception(f"Model {model_name} not found in get_split_model")

@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 from PIL import Image
 from torchvision import transforms
-from transformers import AutoModel, AutoTokenizer, AutoConfig, T5Model
+from transformers import AutoModel, AutoTokenizer, AutoConfig, T5Model, T5ForConditionalGeneration
 from torchsummary import summary
 
 from split_model import get_split_model
@@ -221,7 +221,9 @@ class T5Provider(LMProvider):
         model_path = os.path.join(self.model_folder, model_name + ".pt")
         print(f"Loading model from {model_path}...")
         # model = torch.jit.load(os.path.join(model_path))
-        model = T5Model.from_pretrained(model_name.replace('_','-'), torchscript=True)
+        # model = T5Model.from_pretrained(model_name.replace('_','-'), torchscript=True)
+        # model = T5Model.from_pretrained(model_name.replace('_','-'))
+        model = T5ForConditionalGeneration.from_pretrained(model_name.replace('_','-'), torchscript=True)
         model.eval()
         tokenizer = AutoTokenizer.from_pretrained(model_name.replace('_','-'))
         config = AutoConfig.from_pretrained(model_name.replace('_','-'))
@@ -235,7 +237,7 @@ def get_provider(model_folder, model_name, device, max_count):
         return CodeBertProvider(model_folder, model_name, device, max_count)
     if (model_name in ['albert_xxlarge_v2']):
         return AlbertProvider(model_folder, model_name, device, max_count)
-    if (model_name in ['t5_3B']):
+    if (model_name in ['t5_3B','t5_small']):
         return T5Provider(model_folder, model_name, device, max_count)
     if (model_name == "resnet50"):
         return ResNet50Provider(model_folder, model_name, device, max_count)

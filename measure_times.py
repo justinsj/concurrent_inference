@@ -19,7 +19,8 @@ model_names = [
     # 'DialoGPT-large', # 3134799287
     # 'bart-large', # 1625830197
     # 'gpt2-xl', # 6282033981
-    't5-3B', # 11408097021
+    # 't5-3B', # 11408097021
+    't5-small',
     ]
 
 GPU_INDEX = 1
@@ -90,7 +91,8 @@ for model_name in model_names:
             for module_idx, module_part in enumerate(split_model.list_of_modules):
                 
                 example = split_model.format_input(module_idx, example)
-                print(f"Running {model_name} {module_idx}/{split_model.total_modules} {i}/{NUM_TESTS}")
+                module_part = split_model.list_of_modules[module_idx]
+                print(f"Running {model_name} {module_idx}/{split_model.total_modules} {i}/{NUM_TESTS} {module_part.__class__.__name__}")
                 input_shape, input_bytes = split_model.get_input_data(module_idx, example)
 
                 # Measure the cold start time
