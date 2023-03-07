@@ -13,17 +13,19 @@ model_folder = '../measure-lms/codebert'
 model_names = [
     # 'resnet50', # 102735697
     # 'vit_h14_in1k', # 2534512143
-    # 'codebert_base', # 498965601
-    # 'albert-xxlarge-v2', # 890450058
-    # 'DialoGPT-large', # 3134799287
-    # 'bart-large', # 1625830197
-    # 'gpt2-xl', # 6282033981
+    'codebert_base', # 498965601
+    'albert-xxlarge-v2', # 890450058
+    'DialoGPT-large', # 3134799287
+    'bart-large', # 1625830197
+    'gpt2-xl', # 6282033981
     't5-3B', # 11408097021
     # 't5-small',
     ]
 
 GPU_INDEX = 1
-device = torch.device(f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu')
+
+device_name = f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu'
+device = torch.device(device_name)
 
 # inputs_folder = '../measure-lms/codebert/clean_inputs.csv'
 MAX_COUNT = 50
@@ -32,11 +34,12 @@ NUM_TESTS = 10
 
 
 class ColdStartData:
-    def __init__(self, cold_start_time, file_size):
+    def __init__(self, cold_start_time, file_size, send_time):
         self.cold_start_time = cold_start_time
         self.file_size = file_size
+        self.send_time = send_time
 
-def measure_cold_start(module_idx, split_model, example):
+def measure_cold_start(module_idx, split_model, example, device):
     temp_filename = split_model.get_temp_name(module_idx) 
 
     module_part = split_model.list_of_modules[module_idx]
@@ -54,23 +57,28 @@ def measure_cold_start(module_idx, split_model, example):
     module_sample = torch.jit.load(io.BytesIO(data))
     end = time.time()
 
+    cold_start_time = end - start
+
+    start = time.time()
+    module_sample = module_sample.to(device)
+    end = time.time()
+    send_time = end - start
     # Delete the file
     os.remove(temp_filename)
+    return ColdStartData(cold_start_time, file_size, send_time)
 
-    cold_start_time = end - start
-    return ColdStartData(cold_start_time, file_size)
-
-def measure_inference(module_idx, split_model, example):
+def measure_inference(module_idx, split_model, example, device):
     start = time.time()
     split_model.inference(module_idx, example)
     end = time.time()
     exec_time = end - start
     return exec_time
 
+BASE_FOLDER = f"logger/logs/{device_name.replace(':','_')}/times"
 # For each DL model
 for model_name in model_names:
     model_name = model_name.replace('-', '_')
-    output_path = f'logger/logs/times/measurements_{model_name}.csv'
+    output_path = os.path.join(BASE_FOLDER, f'measurements_{model_name}.csv')
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     provider = get_provider(model_folder, model_name, device, MAX_COUNT)
@@ -95,11 +103,11 @@ for model_name in model_names:
                 input_shape, input_bytes = split_model.get_input_data(module_idx, example)
 
                 # Measure the cold start time
-                cold_start_data = measure_cold_start(module_idx, split_model, example)
-                # cold_start_time, file_size, load_time
+                cold_start_data = measure_cold_start(module_idx, split_model, example, device)
+                # cold_start_time, file_size, send_time
 
                 # Measure the inference time
-                exec_time = measure_inference(module_idx, split_model, example)
+                exec_time = measure_inference(module_idx, split_model, example, device)
                 # exec_time
                 
                 # Keep the output and perform the conversion to the next input
@@ -109,7 +117,8 @@ for model_name in model_names:
                     'action': 'cold_start', 
                     'module_idx': module_idx, 
                     'num_modules': split_model.total_modules, 
-                    'cold_start_time': cold_start_data.cold_start_time, 
+                    'cold_start_time': cold_start_data.cold_start_time,
+                    'send_time': cold_start_data.send_time, 
                     'exec_time': exec_time,
                     'input_shape': input_shape,
                     'input_bytes': input_bytes,
