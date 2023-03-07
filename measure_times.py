@@ -15,7 +15,7 @@ model_names = [
     # 'vit_h14_in1k', # 2534512143
     # 'codebert_base', # 498965601
     # 'albert-xxlarge-v2', # 890450058
-    'DialoGPT-large', # 3134799287
+    # 'DialoGPT-large', # 3134799287
     'bart-large', # 1625830197
     'gpt2-xl', # 6282033981
     't5-3B', # 11408097021
