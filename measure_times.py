@@ -1,3 +1,5 @@
+import gc
+
 import time
 import torch
 import os
@@ -13,12 +15,14 @@ model_folder = '../measure-lms/codebert'
 model_names = [
     # 'resnet50', # 102735697
     # 'vit_h14_in1k', # 2534512143
-    'codebert_base', # 498965601
-    'albert-xxlarge-v2', # 890450058
-    'DialoGPT-large', # 3134799287
+
+    # 'codebert_base', # 498965601
+    # 'albert-xxlarge-v2', # 890450058
+    # 'DialoGPT-large', # 3134799287
     'bart-large', # 1625830197
     'gpt2-xl', # 6282033981
     't5-3B', # 11408097021
+    
     # 't5-small',
     ]
 
@@ -53,9 +57,12 @@ def measure_cold_start(module_idx, split_model, example, device):
     # Load the data from the file as bytes
     data = open(temp_filename, 'rb').read()
 
+    default_device = torch.device('cpu')
     start = time.time()
     module_sample = torch.jit.load(io.BytesIO(data))
     end = time.time()
+    
+    module_sample = module_sample.to(default_device)
 
     cold_start_time = end - start
 
@@ -128,6 +135,8 @@ for model_name in model_names:
                 main_df.to_csv(output_path, index=False)
             
             provider.split_model.reset()
+            torch.cuda.empty_cache()
+            gc.collect()
 
 
 
