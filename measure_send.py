@@ -21,11 +21,12 @@ model_names = [
     ]
 
 default_device = torch.device('cpu')
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device_name = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+device = torch.device(device_name)
 
 df = pd.DataFrame()
 NUM_TESTS = 10
-output_path = f'logger/logs/cuda_1/send/measurements.csv'
+output_path = f'logger/logs/{device_name.replace(':','_')}/send/measurements.csv'
 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 first_time = True
 for idx, model_name in enumerate(model_names):
