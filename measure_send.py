@@ -39,7 +39,7 @@ for idx, model_name in enumerate(model_names):
         gc.collect()
 
         start = time.time()
-        model = model.to(torch.device('cuda:1'))
+        model = model.to(torch.device('cuda:0'))
         end = time.time()
         send_time = end - start
 
