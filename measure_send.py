@@ -10,17 +10,18 @@ model_names = [
     # 'resnet50', # 102735697
     # 'vit_h14_in1k', # 2534512143
 
-    # 'codebert_base', # 498965601
-    # 'albert-xxlarge-v2', # 890450058
-    # 'DialoGPT-large', # 3134799287
-    # 'bart-large', # 1625830197
-    # 'gpt2-xl', # 6282033981
+    'codebert_base', # 498965601
+    'albert-xxlarge-v2', # 890450058
+    'DialoGPT-large', # 3134799287
+    'bart-large', # 1625830197
+    'gpt2-xl', # 6282033981
     't5-3B', # 11408097021
     
     # 't5-small',
     ]
 
 default_device = torch.device('cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 df = pd.DataFrame()
 NUM_TESTS = 10
@@ -39,7 +40,7 @@ for idx, model_name in enumerate(model_names):
         gc.collect()
 
         start = time.time()
-        model = model.to(torch.device('cuda:1'))
+        model = model.to(device)
         end = time.time()
         send_time = end - start
 
