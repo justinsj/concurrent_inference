@@ -130,6 +130,19 @@ class LMSplitModel(SplitModel):
         self.tokenizer = tokenizer
 
     def get_input_data(self, module_idx, example):
+        if (hasattr(example, 'shape')):
+            input_shape = list(example.shape)
+            input_bytes = example.nelement() * example.element_size()
+            return input_shape, input_bytes
+        if (type(example) == tuple):
+            # Add the input bytes of each item in the tuple
+            input_shape = [len(example)]
+            input_bytes = 0
+            for item in example:
+                next_input_shape, next_input_bytes = self.get_input_data(module_idx, item)
+                input_bytes += next_input_bytes
+            return input_shape, input_bytes
+        
         input_shape = [len(example)]
         input_bytes = sys.getsizeof(example)
         return input_shape, input_bytes
@@ -181,11 +194,6 @@ class AlbertSplitModel(LMSplitModel):
         else:
             children = module.children()
         return list(children)
-    
-    def get_input_data(self, module_idx, example):
-        input_shape = [len(example)]
-        input_bytes = sys.getsizeof(example)
-        return input_shape, input_bytes
 
     def format_input(self, module_idx, example):
         tokenizer = self.tokenizer
@@ -245,11 +253,6 @@ class T5SplitModel(LMSplitModel):
             else:
                 children = module.children()
         return list(children)
-    
-    def get_input_data(self, module_idx, example):
-        input_shape = [len(example)]
-        input_bytes = sys.getsizeof(example)
-        return input_shape, input_bytes
 
     def format_input(self, module_idx, example):
         tokenizer = self.tokenizer
