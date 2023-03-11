@@ -44,12 +44,10 @@ class ColdStartData:
         self.file_size = file_size
         self.send_time = send_time
 
-def measure_cold_start(module_idx, split_model, example, device):
-    temp_filename = split_model.get_temp_name(module_idx) 
+def measure_cold_start(split_model, example, device):
 
-    module_part = split_model.list_of_modules[module_idx]
-
-    module_trace = split_model.trace(module_idx, example, strict=False)
+    temp_filename = f'{split_model.model_name}_temp.pt'
+    module_trace = torch.jit.trace(split_model.model, example, strict=False)
     module_trace.save(temp_filename)
     
     # Get the size of the file
@@ -75,14 +73,14 @@ def measure_cold_start(module_idx, split_model, example, device):
     os.remove(temp_filename)
     return ColdStartData(cold_start_time, file_size, send_time)
 
-def measure_inference(module_idx, split_model, example, device):
+def measure_inference(split_model, example, device):
     start = time.time()
-    split_model.inference(module_idx, example)
+    split_model.model(example)
     end = time.time()
     exec_time = end - start
     return exec_time
 
-BASE_FOLDER = f"logger/logs/{device_name.replace(':','_')}/times"
+BASE_FOLDER = f"logger/logs/{device_name.replace(':','_')}/exec"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('model_name', type=str, help='Model name (e.g. codebert_base)')
@@ -110,9 +108,9 @@ for input_argument in inputs_list:
         split_model = provider.split_model
         example = provider.prepare_input(input_argument)
             
-        example = split_model.format_input(split_model.model, example)
+        example = split_model.format_input(0, example)
         print(f"Running example {i} of {NUM_TESTS}")
-        input_shape, input_bytes = split_model.get_input_data(split_model.model, example)
+        input_shape, input_bytes = split_model.get_input_data(0, example)
 
         # Measure the cold start time
         cold_start_data = measure_cold_start(split_model, example, device)
