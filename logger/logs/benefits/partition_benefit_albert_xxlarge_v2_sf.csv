@@ -1,2 +1,2 @@
 x,percent_benefit,num_partitions,num_cuts,total_modules,best_val,base_val,partitions,C,E,N,I,Wb,IN
-1,0,3,2,5,inf,2.2249422876791525,"[2, 3]",0,0,0,0.00022079062028363054,0,0
+1,0,3,2,5,inf,2.189958680040186,"[2, 3]",0,0,0,0.00017158830816093934,0,0

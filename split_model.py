@@ -130,6 +130,8 @@ class LMSplitModel(SplitModel):
         self.tokenizer = tokenizer
 
     def get_input_data(self, module_idx, example):
+        if (example == None):
+            return 0,0
         if (hasattr(example, 'shape')):
             input_shape = list(example.shape)
             input_bytes = example.nelement() * example.element_size()
@@ -276,13 +278,150 @@ class T5SplitModel(LMSplitModel):
         self.original_example = None
 
     
+class DialoGPTSplitModel(LMSplitModel):
+    def __init__(self, model_name, model_tokenizer, device):
+        super().__init__(model_name, model_tokenizer, device)
+        self.input_ids = None
+    def get_list_of_modules(self):
+        print(f"Model: {self.model}")
+        return self.load_list_of_modules(self.model, 2)
+    def get_children(self, module):
+        children = []
+        if type(module) == tuple:
+            children = module
+        elif ('Embedding' in module.__class__.__name__):
+            return []
+        else:
+            children = module.children()
+        return list(children)
+    
+    def format_input(self, module_idx, example):
+        tokenizer = self.tokenizer
+        module_part = self.list_of_modules[module_idx]
+        # if (module_part.__class__.__name__ == 'Embedding'):
+        if (module_idx == 0):
+            
+            tokens_ids = tokenizer.encode(example + tokenizer.eos_token, return_tensors='pt')
+            example = torch.tensor(tokens_ids)[None,:]
+            example = example.to(self.device)
+            if (self.input_ids == None):
+                self.input_ids = example
+        elif (module_idx == 1):
+            example = self.input_ids
+            past_length = 0
+            input_shape = example.size()
+            position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.long, device=self.device)
+            position_ids = position_ids.unsqueeze(0).view(-1, input_shape[-1])
+            example = position_ids
+            example = torch.tensor(example)[None,:]
+            example = example.to(self.device)
+        
+        cur_name = module_part.__class__.__name__
+        if ((cur_name in ['GPT2Block','LayerNorm'])):
+            return example[0]
+        return example
+    
+    def reset(self):
+        self.input_ids = None
+    
+class GPT2SplitModel(DialoGPTSplitModel):
+    pass
+
+class BartSplitModel(DialoGPTSplitModel):
+    def __init__(self, model_name, model_tokenizer, device):
+        super().__init__(model_name, model_tokenizer, device)
+        self.dtype = torch.float32
+        self.original_input = None
+        self.input_ids = None
+        self.take_first_layers = list(range(4,15+1))
+        self.take_first_layers.extend(list(range(19,30+1)))
+    def get_list_of_modules(self):
+        print(f"Model: {self.model}")
+        return self.load_list_of_modules(self.model, 3)
+    
+    def format_input(self, module_idx, example):
+        tokenizer = self.tokenizer
+        module_part = self.list_of_modules[module_idx]
+        # if (module_part.__class__.__name__ == 'Embedding'):
+        if (module_idx in [0, 16]):
+            if (self.original_input == None):
+                self.original_input = example
+            else:
+                example = self.original_input
+            tokens_ids = tokenizer.encode(example + tokenizer.eos_token, return_tensors='pt')
+            example = torch.tensor(tokens_ids)[None,:]
+            example = example.to(self.device)
+            if (self.input_ids == None):
+                self.input_ids = example
+        elif (module_idx in [1]):
+            example = self.input_ids
+            past_length = 0
+            input_shape = example.size()
+            position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.long, device=self.device)
+            position_ids = position_ids.unsqueeze(0).view(-1, input_shape[-1])
+            example = position_ids
+            example = torch.tensor(example)[None,:]
+            example = example.to(self.device)
+        
+        return example
+    
+    def get_masks(self, module_idx, example):
+        head_mask = [0] * 16
+        head_mask = torch.tensor(head_mask)
+        head_mask = head_mask.to(self.device)
+        input_shape = example.size()[:-1]
+        print(f"Input shape: {input_shape}")
+        attention_mask = torch.ones(input_shape, device=self.device)
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)  # fp16 compatibility
+        extended_attention_mask = (1.0 - extended_attention_mask) * torch.finfo(self.dtype).min
+        return extended_attention_mask, head_mask
+    def trace(self, module_idx, example, strict=True):
+        module_part = self.list_of_modules[module_idx]
+        print(f" Example: {example}")
+        if (module_part.__class__.__name__ in ["BartEncoderLayer"]):
+            if (module_idx in self.take_first_layers):
+                example = example[0]
+            extended_attention_mask, head_mask = self.get_masks(module_idx, example)
+            traced_model = torch.jit.trace(module_part, (example, extended_attention_mask, head_mask), strict=strict)
+            return traced_model
+        if (module_idx in self.take_first_layers):
+            example = example[0]
+        traced_model = torch.jit.trace(module_part, example, strict=strict)
+        return traced_model
+    def inference(self, module_idx, example):
+        module_part = self.list_of_modules[module_idx]
+        if (module_part.__class__.__name__ in ["BartEncoderLayer"]):
+            print(f"module_idx: {module_idx}, example: {example}")
+            if (module_idx in self.take_first_layers):
+                example = example[0]
+            
+            extended_attention_mask, head_mask = self.get_masks(module_idx, example)
+            return module_part(example, extended_attention_mask, head_mask)
+        # if ("coderLayer" in module_part.__class__.__name__):
+        #     head_mask = [0] * 16
+        #     return module_part(example, head_mask = head_mask)
+        if (module_idx in self.take_first_layers):
+            example = example[0]
+        return module_part(example)
+    pass
+    def reset(self):
+        self.input_ids = None
+        self.original_input = None
+
 def get_split_model(model_name, model, device):
     if model_name == "resnet50":
         return ResNetSplitModel(model_name, model, device)
     if model_name == "vit_h14_in1k":
         return ViTSplitModel(model_name, model, device)
-    if model_name in ['codebert_base','DialoGPT_large','bart_large','gpt2_xl']:
+    if model_name in ['codebert_base']:
         return CodeBertSplitModel(model_name, model, device)
+    if model_name in ['DialoGPT_large']:
+        return DialoGPTSplitModel(model_name, model, device)
+    if model_name in ['bart_large']:
+        return BartSplitModel(model_name, model, device)
+    if model_name in ['gpt2_xl']:
+        return GPT2SplitModel(model_name, model, device)
     if model_name == "albert_xxlarge_v2":
         return AlbertSplitModel(model_name, model, device)
     if model_name in ['t5_3B','t5_small']:

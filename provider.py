@@ -168,6 +168,71 @@ class CodeBertProvider(LMProvider):
         # print(f"Summary: {model}")
 
         return (model, tokenizer)
+    
+class DialoGPTProvider(CodeBertProvider):
+    number_inferences = 0
+
+    def prepare_input_string(self, tokenizer, input_string):
+        # encode the new user input, add the eos_token and return a tensor in Pytorch
+        tokens_ids = tokenizer.encode(input_string + tokenizer.eos_token, return_tensors='pt')
+        print(tokens_ids)
+        example = torch.tensor(tokens_ids)[None,:]
+        example = example.to(self.device)
+        return example
+        
+
+        
+    def get_model(self):
+        model_name = self.model_name.replace('-', '_')
+        model_path = os.path.join(self.model_folder, model_name + ".pt")
+        print(f"Loading model from {model_path}...")
+        # model = torch.jit.load(os.path.join(model_path))
+        model = AutoModel.from_pretrained("microsoft/DialoGPT-large")
+        model.eval()
+        tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-large")
+        model = model.to(self.device)
+
+        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
+        print(f"Model loaded from {model_path}...")
+        # print(f"Summary: {model}")
+
+        return (model, tokenizer)
+
+class BARTProvider(CodeBertProvider):
+    number_inferences = 0
+    def get_model(self):
+        model_name = self.model_name.replace('-', '_')
+        model_path = os.path.join(self.model_folder, model_name + ".pt")
+        print(f"Loading model from {model_path}...")
+        # model = torch.jit.load(os.path.join(model_path))
+        model = AutoModel.from_pretrained("facebook/bart-large")
+        model.eval()
+        tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
+        model = model.to(self.device)
+
+        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
+        print(f"Model loaded from {model_path}...")
+        # print(f"Summary: {model}")
+
+        return (model, tokenizer)
+    
+class GPT2Provider(DialoGPTProvider):
+    number_inferences = 0
+    def get_model(self):
+        model_name = self.model_name.replace('-', '_')
+        model_path = os.path.join(self.model_folder, model_name + ".pt")
+        print(f"Loading model from {model_path}...")
+        # model = torch.jit.load(os.path.join(model_path))
+        model = AutoModel.from_pretrained("gpt2-xl")
+        model.eval()
+        tokenizer = AutoTokenizer.from_pretrained("gpt2-xl")
+        model = model.to(self.device)
+
+        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
+        print(f"Model loaded from {model_path}...")
+        # print(f"Summary: {model}")
+
+        return (model, tokenizer)
 
 class AlbertProvider(LMProvider):
     number_inferences = 0
@@ -233,8 +298,15 @@ class T5Provider(LMProvider):
         return (model, tokenizer)
 
 def get_provider(model_folder, model_name, device, max_count):
-    if (model_name in ["codebert_base",'DialoGPT_large','bart_large','gpt2_xl']):
+    if (model_name in ["codebert_base"]):
         return CodeBertProvider(model_folder, model_name, device, max_count)
+    if (model_name in ['DialoGPT_large']):
+        return DialoGPTProvider(model_folder, model_name, device, max_count)
+    if (model_name in ['bart_large']):
+        return BARTProvider(model_folder, model_name, device, max_count)
+    if (model_name in ['gpt2_xl']):
+        return GPT2Provider(model_folder, model_name, device, max_count)
+    
     if (model_name in ['albert_xxlarge_v2']):
         return AlbertProvider(model_folder, model_name, device, max_count)
     if (model_name in ['t5_3B','t5_small']):
