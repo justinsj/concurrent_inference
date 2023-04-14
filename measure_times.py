@@ -12,7 +12,7 @@ import pandas as pd
 # Goal is to have measured dataframe with the following headers:
 # action,module_idx,num_modules,cold_start_time,exec_time,input_shape,input_bytes,file_size
 
-model_folder = '../measure-lms/codebert'
+model_folder = './models'
 # model_names = [
 #     # 'resnet50', # 102735697
 #     # 'vit_h14_in1k', # 2534512143
@@ -27,7 +27,7 @@ model_folder = '../measure-lms/codebert'
 #     # 't5-small',
 #     ]
 
-GPU_INDEX = 1
+GPU_INDEX = 0
 
 device_name = f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu'
 device = torch.device(device_name)

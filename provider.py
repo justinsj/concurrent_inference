@@ -119,7 +119,7 @@ class ViTProvider(CNNProvider):
     
 class LMProvider(Provider):
     def get_inputs_folder(self):
-        return '../measure-lms/codebert/clean_inputs.csv'
+        return './clean_inputs.csv'
     
     def prepare_input(self, string):
         return string

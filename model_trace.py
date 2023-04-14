@@ -98,10 +98,12 @@ if __name__ == '__main__':
         # Check if file already exists
         filename = model_name.split('/')[-1].replace('-','_')+'.pt'
         print(f"Filename: {filename}")
-        if os.path.exists(filename):
+        fpath = os.path.join('./models', filename)
+        if os.path.exists(fpath):
             print('File already exists')
             continue
         
         # if model_name == 'codebert':
         # else:
-        download_model(model_name, filename, device)
+        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+        download_model(model_name, fpath, device)

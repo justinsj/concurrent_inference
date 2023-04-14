@@ -32,6 +32,9 @@ python count_objects.py -if ~/measure-lms/codebert/clean_inputs.csv -o output_fi
 python count_objects.py -if ~/measure-lms/codebert/clean_inputs.csv -o output_file.log -q 1000 -r 1000 -m albert_xxlarge_v2 -mf ~/measure-lms/codebert -d 1 -i 1 -mc 98
 ```
 
+```
+```
+
 
 https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries
 
@@ -48,3 +51,7 @@ python analyze_data.py
 ```
 
 python count_objects.py -if clean_inputs.csv -o output_file.log -q 1000 -r 1000 -m t5_3B -mf ./models -d 1 -i 0 -mc 98
+
+```
+python measure_times.py t5_3B
+```
