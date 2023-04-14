@@ -46,3 +46,5 @@ python measure_footprints.py
 python measure_times.py
 python analyze_data.py
 ```
+
+python count_objects.py -if clean_inputs.csv -o output_file.log -q 1000 -r 1000 -m t5_3B -mf ./models -d 1 -i 0 -mc 98
