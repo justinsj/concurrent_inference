@@ -89,6 +89,7 @@ def process_file(path, model_name, d, model_folder):
     gpu_exec_memory_usage = (active_rows['gpu_memory_used'].mean() - process_inactive_rows['gpu_memory_used'].mean()) * MiB_TO_B
     gpu_exec_compute_usage = calculate_gpu_compute_usage(average_execution_time, rate)
 
+    assert gpu_exec_compute_usage + gpu_process_compute_usage <= 1.0, f"Expected {gpu_exec_compute_usage + gpu_process_compute_usage} to be <= 1.0"
     return {
         'gpu_process_memory_usage': int(gpu_process_memory_usage),
         'gpu_process_compute_usage': gpu_process_compute_usage,

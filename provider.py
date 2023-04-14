@@ -27,12 +27,11 @@ def transform(pil_image, image_size):
 
 
 class Provider(object):
-    def __init__(self, model_folder, model_name, device, max_count):
+    def __init__(self, model_folder, model_name, device):
         self.model_folder = model_folder
         self.model_name = model_name
         self.device = device
         self.ext = "JPEG"
-        self.max_count = max_count
         self.split_model = self.get_split_model()
 
     def get_split_model(self):
@@ -72,50 +71,6 @@ class Provider(object):
 
     def get_inputs_folder(self):
         raise NotImplementedError(f"get_inputs_folder() not implemented for {self.__class__.__name__}")
-
-class CNNProvider(Provider):
-    def get_inputs_folder(self):
-        return './input_folder'
-    
-    def load_inputs(self, inputs_path):
-        inputs_list = list(Path(inputs_path).rglob(f"*.{self.ext}"))[0:self.max_count]
-        return inputs_list
-
-    def prepare_input(self, image_path):
-        image = Image.open(image_path)
-        image = transform(image, self.image_size)
-        image = image.to(self.device)
-        return image
-
-    def inference_from_queue_message(self, model, queue_message):
-        image, input_argument, start_time = queue_message
-        image = torch.unsqueeze(image, 0)
-        image = image.to(self.device)
-        output = model(image)
-        return output, input_argument, start_time
-
-class ResNet50Provider(CNNProvider):
-    def __init__(self, model_folder, model_name, device, max_count):
-        super().__init__(model_folder, model_name, device, max_count)
-        self.image_size = 224
-
-    def load_inputs(self, input_folder):
-        inputs_list = list(Path(input_folder).rglob(f"*.{self.ext}"))[0:self.max_count]
-        return inputs_list
-class ViTProvider(CNNProvider):
-    def __init__(self, model_folder, model_name, device, max_count):
-        super().__init__(model_folder, model_name, device, max_count)
-        self.image_size = 518
-    def get_model(self):
-        model_name = self.model_name.replace('-', '_')
-        model_path = os.path.join(self.model_folder, model_name + ".pt")
-        # if not os.path.exists(model_path):
-        model = torch.hub.load("facebookresearch/swag", model=model_name)
-        # else:
-        #     model = torch.jit.load(model_path)
-        model.eval()
-        model = model.to(self.device)
-        return model
     
 class LMProvider(Provider):
     def get_inputs_folder(self):
@@ -126,143 +81,7 @@ class LMProvider(Provider):
     def load_inputs(self, inputs_path, ext="JPEG"):
         inputs_list = pd.read_csv(inputs_path)['input'].tolist()[:self.max_count]
         return inputs_list
-class CodeBertProvider(LMProvider):
-    number_inferences = 0
-
-    def prepare_input_string(self, tokenizer, input_string):
-        code_tokens=tokenizer.tokenize(input_string)
-        tokens=[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
-        tokens_ids=tokenizer.convert_tokens_to_ids(tokens)
-
-        example = torch.tensor(tokens_ids)[None,:]
-        example = example.to(self.device)
-        return example
-    
-    def inference_from_queue_message(self, model_tokenizer, queue_message):
-        # CodeBertProvider.number_inferences += 1
-        # print(f"Number of inferences: {CodeBertProvider.number_inferences}")
-        input_string, input_argument, start_time = queue_message
-        model, tokenizer = model_tokenizer
-        code_tokens=tokenizer.tokenize(input_string)
-        tokens=[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
-        tokens_ids=tokenizer.convert_tokens_to_ids(tokens)
-
-        example = torch.tensor(tokens_ids)[None,:]
-        example = example.to(self.device)
-        output = model(example)
-        
-        return output, input_argument, start_time
-
-    def get_model(self):
-        model_name = self.model_name.replace('-', '_')
-        model_path = os.path.join(self.model_folder, model_name + ".pt")
-        print(f"Loading model from {model_path}...")
-        # model = torch.jit.load(os.path.join(model_path))
-        model = AutoModel.from_pretrained("microsoft/codebert-base")
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
-        model = model.to(self.device)
-
-        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
-        print(f"Model loaded from {model_path}...")
-        # print(f"Summary: {model}")
-
-        return (model, tokenizer)
-    
-class DialoGPTProvider(CodeBertProvider):
-    number_inferences = 0
-
-    def prepare_input_string(self, tokenizer, input_string):
-        # encode the new user input, add the eos_token and return a tensor in Pytorch
-        tokens_ids = tokenizer.encode(input_string + tokenizer.eos_token, return_tensors='pt')
-        print(tokens_ids)
-        example = torch.tensor(tokens_ids)[None,:]
-        example = example.to(self.device)
-        return example
-        
-
-        
-    def get_model(self):
-        model_name = self.model_name.replace('-', '_')
-        model_path = os.path.join(self.model_folder, model_name + ".pt")
-        print(f"Loading model from {model_path}...")
-        # model = torch.jit.load(os.path.join(model_path))
-        model = AutoModel.from_pretrained("microsoft/DialoGPT-large")
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-large")
-        model = model.to(self.device)
-
-        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
-        print(f"Model loaded from {model_path}...")
-        # print(f"Summary: {model}")
-
-        return (model, tokenizer)
-
-class BARTProvider(CodeBertProvider):
-    number_inferences = 0
-    def get_model(self):
-        model_name = self.model_name.replace('-', '_')
-        model_path = os.path.join(self.model_folder, model_name + ".pt")
-        print(f"Loading model from {model_path}...")
-        # model = torch.jit.load(os.path.join(model_path))
-        model = AutoModel.from_pretrained("facebook/bart-large")
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
-        model = model.to(self.device)
-
-        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
-        print(f"Model loaded from {model_path}...")
-        # print(f"Summary: {model}")
-
-        return (model, tokenizer)
-    
-class GPT2Provider(DialoGPTProvider):
-    number_inferences = 0
-    def get_model(self):
-        model_name = self.model_name.replace('-', '_')
-        model_path = os.path.join(self.model_folder, model_name + ".pt")
-        print(f"Loading model from {model_path}...")
-        # model = torch.jit.load(os.path.join(model_path))
-        model = AutoModel.from_pretrained("gpt2-xl")
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained("gpt2-xl")
-        model = model.to(self.device)
-
-        input_data = self.prepare_input_string(tokenizer, "print('Hello world')")
-        print(f"Model loaded from {model_path}...")
-        # print(f"Summary: {model}")
-
-        return (model, tokenizer)
-
-class AlbertProvider(LMProvider):
-    number_inferences = 0
-
-    def inference_from_queue_message(self, model_tokenizer, queue_message):
-        model, tokenizer = model_tokenizer
-        input_string, input_argument, start_time = queue_message
-
-        # example = tokenizer(input_string, return_tensors="pt")
-        example = torch.tensor(tokenizer.encode(input_string, add_special_tokens=True)).unsqueeze(0)
-        example = example.to(self.device)
-        output = model(example)
-        
-        return output, input_argument, start_time
-
-    def get_model(self):
-        model_name = self.model_name.replace('-', '_')
-        model_path = os.path.join(self.model_folder, model_name + ".pt")
-        print(f"Loading model from {model_path}...")
-        # model = torch.jit.load(os.path.join(model_path))
-        model = AutoModel.from_pretrained(model_name.replace('_','-'))
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained(model_name.replace('_','-'))
-
-        
-        model = model.to(self.device)
-
-        return (model, tokenizer)
-
-
+ 
 class T5Provider(LMProvider):
     number_inferences = 0
 
@@ -297,23 +116,9 @@ class T5Provider(LMProvider):
 
         return (model, tokenizer)
 
-def get_provider(model_folder, model_name, device, max_count):
-    if (model_name in ["codebert_base"]):
-        return CodeBertProvider(model_folder, model_name, device, max_count)
-    if (model_name in ['DialoGPT_large']):
-        return DialoGPTProvider(model_folder, model_name, device, max_count)
-    if (model_name in ['bart_large']):
-        return BARTProvider(model_folder, model_name, device, max_count)
-    if (model_name in ['gpt2_xl']):
-        return GPT2Provider(model_folder, model_name, device, max_count)
-    
-    if (model_name in ['albert_xxlarge_v2']):
-        return AlbertProvider(model_folder, model_name, device, max_count)
+def get_provider(model_folder, model_name, device):
+    model_name = model_name.replace('-', '_')
     if (model_name in ['t5_3B','t5_small']):
-        return T5Provider(model_folder, model_name, device, max_count)
-    if (model_name == "resnet50"):
-        return ResNet50Provider(model_folder, model_name, device, max_count)
-    if (model_name in ['vit_h14_in1k']):
-        return ViTProvider(model_folder, model_name, device, max_count)
+        return T5Provider(model_folder, model_name, device)
     
     raise Exception(f"Model {model_name} not found in get_provider")
