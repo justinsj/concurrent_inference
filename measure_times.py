@@ -29,8 +29,7 @@ model_folder = './models'
 
 GPU_INDEX = 0
 
-device_name = f'cuda:{GPU_INDEX}' if torch.cuda.is_available() else 'cpu'
-device = torch.device(device_name)
+
 
 # inputs_folder = '../measure-lms/codebert/clean_inputs.csv'
 MAX_COUNT = 50
@@ -82,16 +81,21 @@ def measure_inference(module_idx, split_model, example, device):
     exec_time = end - start
     return exec_time
 
-BASE_FOLDER = f"logger/logs/{device_name.replace(':','_')}/times"
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('model_name', type=str, help='Model name (e.g. codebert_base)')
+parser.add_argument('-uc', '--use_cuda', action='store_true', help='Use CUDA', default=False)
 # For each DL model
 # for model_name in model_names:
 
 args = parser.parse_args()
 model_name = args.model_name
 model_name = model_name.replace('-', '_')
+
+device_name = f'cuda:{GPU_INDEX}' if (torch.cuda.is_available() and args.use_cuda) else 'cpu'
+device = torch.device(device_name)
+BASE_FOLDER = f"logger/logs/{device_name.replace(':','_')}/times"
 output_path = os.path.join(BASE_FOLDER, f'measurements_{model_name}.csv')
 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
