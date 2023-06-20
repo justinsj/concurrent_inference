@@ -13,9 +13,9 @@ import torch
 
 model_names = [
     # 'microsoft/codebert-base',
-    # 'albert-xxlarge-v2', 
+    'albert-xxlarge-v2', 
     # 't5-11B', 
-    't5-3B',
+    # 't5-3B',
     # 't5-small', 
     # 'microsoft/DialoGPT-large', 
     # 'facebook/bart-large', 
@@ -68,7 +68,7 @@ def download_model(model_name, filename, device):
     # tokens_ids=tokenizer.convert_tokens_to_ids(tokens)
 
     # example = torch.tensor(tokens_ids)[None,:]
-    if model_name in ['t5-3B','albert-xxlarge-v2']:
+    if model_name in ['t5-3B']:
         input_ids = tokenizer('The <extra_id_0> walks in <extra_id_1> park', return_tensors='pt').input_ids
         attention_mask = input_ids.ne(model.config.pad_token_id).long()
         decoder_input_ids = tokenizer('<pad> <extra_id_0> cute dog <extra_id_1> the <extra_id_2>', return_tensors='pt').input_ids
@@ -78,6 +78,23 @@ def download_model(model_name, filename, device):
         decoder_input_ids = decoder_input_ids.to(device)
 
         traced_model = torch.jit.trace(model, (input_ids, attention_mask, decoder_input_ids))
+    elif model_name in ['albert-xxlarge-v2']:
+        strict=False
+        dtype = torch.float32
+        example = tokenizer.encode('The <extra_id_0> walks in <extra_id_1> park', return_tensors="pt")
+        example = example.to(device)
+        # head_mask = [0] * model.config.num_hidden_layers
+        # # Convert head_mask to tensor
+        # head_mask = torch.tensor(head_mask)
+        # head_mask = head_mask.to(device)
+        # input_shape = example.size()[:-1]
+        # print(f"Input shape: {input_shape}")
+        # attention_mask = torch.ones(input_shape, device=device)
+        # extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        # extended_attention_mask = extended_attention_mask.to(dtype=dtype)  # fp16 compatibility
+        # extended_attention_mask = (1.0 - extended_attention_mask) * torch.finfo(dtype).min
+        # traced_model = torch.jit.trace(model, (example, extended_attention_mask, head_mask), strict=strict)
+        traced_model = torch.jit.trace(model, example)
     else:
         example = torch.tensor([[1,2,3]])#example = prepare_input(tokenizer, input_string)
         example = example.to(device)
